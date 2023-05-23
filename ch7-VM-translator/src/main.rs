@@ -1,5 +1,5 @@
 mod parser;
-mod transpile;
+mod transpiler;
 
 use std::{
     fs::File,
@@ -8,7 +8,7 @@ use std::{
     env::args
 };
 
-use crate::transpile::Transpiler;
+use crate::transpiler::Transpiler;
 use crate::parser::Parser;
 
 fn lines_from_file(filename: impl AsRef<Path>) -> Vec<String> {
@@ -20,10 +20,9 @@ fn lines_from_file(filename: impl AsRef<Path>) -> Vec<String> {
 }
 
 fn main() {
-    
-    ///// PARSE INTRO ARRAY OF STRINGS
+    // PARSE INTRO ARRAY OF STRINGS
     let cmd_args = args().collect::<Vec<String>>();
-    // 1st arg is always cwd, so we get the 2nd
+    // 1st (idx:0) arg is always cwd, so we get the 2nd
     let path_arg = Path::new(cmd_args.get(1).expect("no runtime argument was provided!"));
     let filename = path_arg.file_stem().unwrap().to_str().unwrap();
     
@@ -32,6 +31,6 @@ fn main() {
     let commands = parser.parse_str_vec_to_cmd(&mut instructions.iter().map(|x|x.as_str()));
     print!("{:#?}", commands);
 
-    let mut transpiler = Transpiler::default();
+    let mut transpiler = Transpiler::new(filename);
     transpiler.transp_cmd_vec_to_str(&commands);
 }

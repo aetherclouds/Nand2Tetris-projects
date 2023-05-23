@@ -88,7 +88,7 @@ impl Parser {
     //     }
     // }
 
-    fn match_segment(&self, word: &str) -> MemorySegment {
+    fn _match_segment(&self, word: &str) -> MemorySegment {
         match word {
             "pointer" => MemorySegment::SP,
             "local" => MemorySegment::LCL,
@@ -100,11 +100,11 @@ impl Parser {
             // "r14" => MemorySegment::R14,
             // "r15" => MemorySegment::R15,
             "constant" => MemorySegment::CONST,
-            _ => self.parser_panic(format!("Invalid segment `{}`", word).as_str())
+            _ => self._parser_panic(format!("Invalid segment `{}`", word).as_str())
         }
     }
     
-    fn parse_operation_type(&self, word: &str) -> OperationType {
+    fn _parse_operation_type(&self, word: &str) -> OperationType {
         match word {
             "push" =>       OperationType::StackOperationType(StackOperationType::Push),
             "pop" =>        OperationType::StackOperationType(StackOperationType::Pop),
@@ -117,17 +117,17 @@ impl Parser {
             "and" =>        OperationType::ArithmeticOperationType(ArithmeticOperationType::AND),
             "or" =>         OperationType::ArithmeticOperationType(ArithmeticOperationType::OR),
             "not" =>        OperationType::ArithmeticOperationType(ArithmeticOperationType::NOT),
-            _ => self.parser_panic(format!("Invalid operation `{}`", word).as_str())
+            _ => self._parser_panic(format!("Invalid operation `{}`", word).as_str())
         }
     }
     
-    fn make_cmd<'a>(&self, operation_type: OperationType, rest_of_iter: &mut impl Iterator<Item = &'a str>, full_str: &str) -> Command {
+    fn _make_cmd<'a>(&self, operation_type: OperationType, rest_of_iter: &mut impl Iterator<Item = &'a str>, full_str: &str) -> Command {
         Command {
             cmd_as_obj: match operation_type {
                 OperationType::StackOperationType(op_type) => {
                     CommandAsObject::StackCommand { 
                         operationType: op_type, 
-                        memorySegment: self.match_segment(rest_of_iter.next().unwrap()), 
+                        memorySegment: self._match_segment(rest_of_iter.next().unwrap()), 
                         index: (rest_of_iter.next().unwrap().parse().unwrap()) 
                     }
                 },
@@ -142,8 +142,8 @@ impl Parser {
         if string.chars().count() > 0 && !string.starts_with("//") {
             let words: Vec<&str> = string.split(" ").collect();
             let mut words_iter = words.iter().map(|x| *x);
-            let operation_type = self.parse_operation_type(words_iter.next().unwrap());
-            Some(self.make_cmd(
+            let operation_type = self._parse_operation_type(words_iter.next().unwrap());
+            Some(self._make_cmd(
                 operation_type,
                 words_iter.by_ref(),
                 string.as_ref()
@@ -165,7 +165,7 @@ impl Parser {
         cmds 
     }
 
-    fn parser_panic(&self, message: &str) -> ! {
+    fn _parser_panic(&self, message: &str) -> ! {
         panic!("line {}: {message}", self.current_line.to_string());
     }
     

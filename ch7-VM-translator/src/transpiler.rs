@@ -1,21 +1,15 @@
-use std::{fmt::format, vec};
+use std::{fmt::format, vec, fs::File, io::{prelude::*, LineWriter}};
 use crate::parser::{self, MemorySegment};
 
 // const LCL_ADDR: str = "LCL";
 
 // the 2 are inversed because the stack starts on the top of the RAM and goes down
-const incr_sp_str: &str = "M=M-1\n";
-const decr_sp_str: &str = "M=M+1\n";
+const INCR_SP: &str = "M=M-1\n";
+const DECR_SP: &str = "M=M+1\n";
 
 pub struct Transpiler {
+    to_file: Option<LineWriter<File>>
     // stackBase: u16,
-}
-
-fn go_to_segment(mem_segment: parser::MemorySegment, index: u16) -> String {
-    match_segment(&mem_segment).map_or_else(
-        || format!("@{index}"), 
-        |segment| format!("@{segment}\nA=A+{index}")
-)
 }
 
 pub fn match_segment(mem_segment: &parser::MemorySegment) -> Option<&'static str> {
@@ -36,28 +30,54 @@ pub fn match_segment(mem_segment: &parser::MemorySegment) -> Option<&'static str
 impl Default for Transpiler {
     fn default() -> Self {
         Self {
+            to_file: None
         }
     }
 }
 
 impl Transpiler {
-    fn init(&self) {
-        self.write_line("// TRANSPILED FILE");
-        // self.write_line("// INITIALIZING\n@SP\nM=")
-        // TODO: write stack pointers
+    pub fn new(to_file: &str) -> Self {
+        Self {
+            to_file: if to_file.chars().count() > 0 {
+                Some({
+                    // TODO: use or create `out` folder and save in it
+                    let file = File::create(format!("TRSP-{to_file}.asm")).expect("could not create file!");
+                    let mut file = LineWriter::new(file);
+                    file
+                })
+            } else {
+                None
+            }
+        }
     }
 
-    fn exit(&self) {
-        self.write_line("// EXIT\n@EXIT_LOOP\n0;JMP\n(EXIT_LOOP)\n@EXIT_LOOP\n0;JMP")
+    fn init(&mut self) {
+        self._write_line("// TRANSPILED FILE");
     }
 
-    fn write_line(&self, line: &str) { // this method can be an abstraction -- for a start we write to the console
-        println!("{}", line)
+    fn exit(&mut self) {
+        // // multiply routine: multiply 
+        // self._write_line("// MULTIPLY\n(MULT)\n@EXIT_LOOP\n0;JMP");
+        self._write_line("// EXIT\n@EXIT_LOOP\n0;JMP\n(EXIT_LOOP)\n@EXIT_LOOP\n0;JMP");
+
+        match &mut self.to_file {
+            Some(line_writer) => {line_writer.flush();},
+            None => {}
+        }
     }
 
-    fn write_cmd(&self, cmd: &parser::Command) {
-        self.write_line(format!("// {}", &cmd.cmd_as_str).as_str());
-        self.write_line(self.transp_cmd_to_str(&cmd.cmd_as_obj).as_str());
+    fn _write_line(&mut self, line: &str) {
+        match &mut self.to_file {
+            Some(line_writer) => {line_writer.write_all(format!("{line} \n").as_bytes()).unwrap();},
+            None => {println!("{line}\n");}
+        }
+    }
+
+    // write a commented line with the original, un-translated line, and then the actual parsed line(s)
+    fn write_cmd(&mut self, cmd: &parser::Command) {
+        
+        self._write_line(format!("// {}", &cmd.cmd_as_str).as_str());
+        self._write_line(self.transp_cmd_to_str(&cmd.cmd_as_obj).as_str());
     }
 
     fn transp_cmd_to_str(&self, cmd: &parser::CommandAsObject) -> String {
@@ -65,28 +85,29 @@ impl Transpiler {
         let mut out_string = String::new();
         match cmd {
             parser::CommandAsObject::StackCommand { operationType, memorySegment, index } => {
-                // -- for POP:
-                // @SP
-                // - decrement stack pointer
-                // M=M-1    
-                // A=M+1 - move to addr referenced by sp (we have to compensate for the decrement)
-                // D=M - get data from memory
-                // - now we gotta do the following: @{SEGMENT+INDEX}
-                // @{SEGMENT}
-                // A=A+{INDEX}
-                // M=D
-
-                // -- for PUSH:
-                // - get data from SEGMENT+INDEX 
-                // @{SEGMENT}
-                // A=A+{INDEX}
-                // D=M
-                // - ..then go to top of the stack
-                // @SP
-                // - increment stack pointer
-                // M=M+1
-                // A=M - move to addr referenced by sp
-                // M=D - then finally "push" data to stack
+                /* -- for POP:
+                 @SP
+                 - decrement stack pointer
+                 M=M-1    
+                 A=M+1 - move to addr referenced by sp (we have to compensate for the decrement)
+                 D=M - get data from memory
+                 - now we gotta do the following: @{SEGMENT+INDEX}
+                 @{SEGMENT}
+                 A=A+{INDEX}
+                 M=D
+                */ /*
+                 -- for PUSH:
+                 - get data from SEGMENT+INDEX 
+                 @{SEGMENT}
+                 A=A+{INDEX}
+                 D=M
+                 - ..then go to top of the stack
+                 @SP
+                 - increment stack pointer
+                 M=M+1
+                 A=M - move to addr referenced by sp
+                 M=D - then finally "push" data to stack
+                 */
 
                 
                 let index_as_str = index.to_string();
@@ -109,18 +130,23 @@ impl Transpiler {
                 }.as_str());
             },
             parser::CommandAsObject::ArithmeticCommand { operationType } => {
-                out_string.push_str("@SP\nM=M-1\nA=M+1\nD=M\nA=A-1\n"); 
-                // 1st operand: M (@SP)
-                // 2nd operand: D (@SP+1)
-                // output -> M
+                out_string.push_str("@SP\nM=M-1\nA=M+1\nD=M\nA=A-1\n    "); 
+                /* 
+                1st operand: M (@SP)
+                2nd operand: D (@SP+1)
+                output -> M */
                 out_string.push_str(
             match operationType {
+                        // arithmetic
                         parser::ArithmeticOperationType::ADD =>  "M=M+D",
                         parser::ArithmeticOperationType::SUB =>  "M=M-D",
                         parser::ArithmeticOperationType::NEG =>  "M=0-M",
+                        // TODO: write these also
+                        // comparison
                         parser::ArithmeticOperationType::EQ =>   "",
                         parser::ArithmeticOperationType::GT =>   "",
                         parser::ArithmeticOperationType::LT =>   "",
+                        // logical
                         parser::ArithmeticOperationType::AND =>  "",
                         parser::ArithmeticOperationType::OR =>   "",
                         parser::ArithmeticOperationType::NOT =>  "",
@@ -132,7 +158,7 @@ impl Transpiler {
         out_string
     }
 
-    pub fn transp_cmd_vec_to_str(&self, cmd_vec: &Vec<parser::Command>) { // could maybe return file
+    pub fn transp_cmd_vec_to_str(&mut self, cmd_vec: &Vec<parser::Command>) {
         self.init();
         for cmd in cmd_vec {
             self.write_cmd(cmd);
